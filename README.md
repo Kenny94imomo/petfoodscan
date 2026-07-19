@@ -30,7 +30,13 @@ npm run preview  # serve the production build
 
 ## Notes
 
-- Product data is a mock catalog in `src/data/products.ts`; the barcode scan is
-  simulated (`src/config.ts` controls which product it "finds").
+- The Scan screen uses the device camera (rear camera on phones; requires
+  HTTPS and camera permission). On browsers with the BarcodeDetector API
+  (Chrome/Edge/Android), pointing at a UPC/EAN barcode triggers the scan
+  automatically; codes matching the catalog open that product.
+- Product data is a mock catalog in `src/data/products.ts`; unknown barcodes
+  and the shutter button fall back to a simulated result (`src/config.ts`
+  controls which product it "finds"). If the camera is unavailable, the
+  screen shows a placeholder and the shutter still works.
 - Grade (A–E) and ingredient risk (safe/caution/avoid) color systems live in
   `src/theme.ts`.

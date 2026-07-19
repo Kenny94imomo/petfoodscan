@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react';
 import { CloseIcon } from '../components/icons';
 import { MONO, SCAN_BG, TEAL, TEAL_BRIGHT } from '../theme';
 
@@ -5,7 +6,10 @@ interface ScanScreenProps {
   scanning: boolean;
   onClose: () => void;
   onShutter: () => void;
+  onDetect: (code: string) => void;
 }
+
+type CameraState = 'pending' | 'live' | 'unavailable';
 
 const cornerBase: React.CSSProperties = { position: 'absolute', width: 28, height: 28 };
 const corners: React.CSSProperties[] = [
@@ -15,23 +19,89 @@ const corners: React.CSSProperties[] = [
   { ...cornerBase, bottom: 0, right: 0, borderBottom: `3px solid ${TEAL_BRIGHT}`, borderRight: `3px solid ${TEAL_BRIGHT}`, borderRadius: '0 0 8px 0' },
 ];
 
-export function ScanScreen({ scanning, onClose, onShutter }: ScanScreenProps) {
+export function ScanScreen({ scanning, onClose, onShutter, onDetect }: ScanScreenProps) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const detectedRef = useRef(false);
+  const [camera, setCamera] = useState<CameraState>('pending');
+
+  useEffect(() => {
+    let stream: MediaStream | undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: { ideal: 'environment' } },
+          audio: false,
+        });
+        if (cancelled) {
+          stream.getTracks().forEach((t) => t.stop());
+          return;
+        }
+        const video = videoRef.current;
+        if (video) {
+          video.srcObject = stream;
+          await video.play().catch(() => {});
+        }
+        setCamera('live');
+      } catch {
+        if (!cancelled) setCamera('unavailable');
+      }
+    })();
+    return () => {
+      cancelled = true;
+      stream?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
+
+  // Auto-detect barcodes in the viewfinder where the browser supports it
+  // (Chrome/Edge/Android). Elsewhere the shutter button simulates a scan.
+  useEffect(() => {
+    if (camera !== 'live' || scanning) return;
+    const Detector = (window as unknown as { BarcodeDetector?: new (opts: { formats: string[] }) => { detect(source: HTMLVideoElement): Promise<{ rawValue: string }[]> } }).BarcodeDetector;
+    if (!Detector) return;
+    detectedRef.current = false;
+    const detector = new Detector({ formats: ['upc_a', 'upc_e', 'ean_13', 'ean_8'] });
+    const id = setInterval(async () => {
+      const video = videoRef.current;
+      if (!video || video.readyState < 2 || detectedRef.current) return;
+      try {
+        const codes = await detector.detect(video);
+        if (codes.length > 0 && !detectedRef.current) {
+          detectedRef.current = true;
+          onDetect(codes[0].rawValue);
+        }
+      } catch {
+        // frame not decodable yet; try again on the next tick
+      }
+    }, 400);
+    return () => clearInterval(id);
+  }, [camera, scanning, onDetect]);
+
   return (
     <div style={{ flex: 1, position: 'relative', background: SCAN_BG, overflow: 'hidden' }}>
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          background: 'repeating-linear-gradient(135deg,#131a1e 0px,#131a1e 14px,#0e1417 14px,#0e1417 28px)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
-      >
-        <div style={{ fontFamily: MONO, fontSize: 11, color: 'rgba(255,255,255,.28)', letterSpacing: 1 }}>
-          [ live camera feed ]
+      <video
+        ref={videoRef}
+        autoPlay
+        playsInline
+        muted
+        style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+      />
+      {camera !== 'live' && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'repeating-linear-gradient(135deg,#131a1e 0px,#131a1e 14px,#0e1417 14px,#0e1417 28px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <div style={{ fontFamily: MONO, fontSize: 11, color: 'rgba(255,255,255,.28)', letterSpacing: 1 }}>
+            {camera === 'pending' ? '[ starting camera… ]' : '[ camera unavailable ]'}
+          </div>
         </div>
-      </div>
+      )}
 
       <div
         className="press"
@@ -44,6 +114,8 @@ export function ScanScreen({ scanning, onClose, onShutter }: ScanScreenProps) {
           height: 36,
           borderRadius: '50%',
           background: 'rgba(255,255,255,.12)',
+          backdropFilter: 'blur(6px)',
+          WebkitBackdropFilter: 'blur(6px)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
@@ -57,19 +129,21 @@ export function ScanScreen({ scanning, onClose, onShutter }: ScanScreenProps) {
         {corners.map((style, i) => (
           <div key={i} style={style} />
         ))}
-        <div
-          style={{
-            position: 'absolute',
-            left: 24,
-            right: 24,
-            top: 36,
-            bottom: 36,
-            background:
-              'repeating-linear-gradient(90deg,rgba(255,255,255,.55) 0 3px,transparent 3px 7px,rgba(255,255,255,.55) 7px 9px,transparent 9px 15px)',
-            opacity: 0.35,
-            borderRadius: 4,
-          }}
-        />
+        {camera !== 'live' && (
+          <div
+            style={{
+              position: 'absolute',
+              left: 24,
+              right: 24,
+              top: 36,
+              bottom: 36,
+              background:
+                'repeating-linear-gradient(90deg,rgba(255,255,255,.55) 0 3px,transparent 3px 7px,rgba(255,255,255,.55) 7px 9px,transparent 9px 15px)',
+              opacity: 0.35,
+              borderRadius: 4,
+            }}
+          />
+        )}
         {scanning && (
           <div
             style={{
@@ -88,11 +162,13 @@ export function ScanScreen({ scanning, onClose, onShutter }: ScanScreenProps) {
 
       <div style={{ position: 'absolute', left: 0, right: 0, top: '58%', textAlign: 'center' }}>
         {scanning ? (
-          <div style={{ fontFamily: MONO, fontSize: 12, color: TEAL_BRIGHT, letterSpacing: 1.5, animation: 'pulse 1s infinite' }}>
+          <div style={{ fontFamily: MONO, fontSize: 12, color: TEAL_BRIGHT, letterSpacing: 1.5, animation: 'pulse 1s infinite', textShadow: '0 1px 4px rgba(0,0,0,.6)' }}>
             ANALYZING…
           </div>
         ) : (
-          <div style={{ fontSize: 14, color: 'rgba(255,255,255,.7)' }}>Align the barcode inside the frame</div>
+          <div style={{ fontSize: 14, color: 'rgba(255,255,255,.85)', textShadow: '0 1px 4px rgba(0,0,0,.6)' }}>
+            Align the barcode inside the frame
+          </div>
         )}
       </div>
 

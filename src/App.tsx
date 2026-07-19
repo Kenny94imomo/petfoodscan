@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { DeviceFrame } from './components/DeviceFrame';
 import { TabBar } from './components/TabBar';
 import { SCAN_DURATION_MS, SCAN_FINDS } from './config';
-import { findProduct } from './data/products';
+import { findProduct, findProductByUpc } from './data/products';
 import { DetailScreen } from './screens/DetailScreen';
 import { HistoryScreen } from './screens/HistoryScreen';
 import { HomeScreen } from './screens/HomeScreen';
@@ -37,16 +37,31 @@ export default function App() {
     setScreen('detail');
   };
 
-  const tapShutter = () => {
-    if (scanning) return;
+  const completeScan = useCallback((targetId: string) => {
+    navigator.vibrate?.(50);
     setScanning(true);
     scanTimer.current = setTimeout(() => {
       setScanning(false);
-      setPid(SCAN_FINDS === 'risky' ? 'vb' : 'mf');
+      setPid(targetId);
       setBackTo('result');
       setScreen('result');
     }, SCAN_DURATION_MS);
+  }, []);
+
+  const tapShutter = () => {
+    if (scanning) return;
+    completeScan(SCAN_FINDS === 'risky' ? 'vb' : 'mf');
   };
+
+  // A real barcode was read from the camera: show the matching catalog
+  // product, or fall back to the simulated scan target for unknown codes.
+  const handleDetect = useCallback(
+    (code: string) => {
+      if (scanning) return;
+      completeScan(findProductByUpc(code)?.id ?? (SCAN_FINDS === 'risky' ? 'vb' : 'mf'));
+    },
+    [scanning, completeScan],
+  );
 
   const product = findProduct(pid);
   const showTabs = screen === 'home' || screen === 'history' || screen === 'profile';
@@ -56,7 +71,9 @@ export default function App() {
       {screen === 'home' && (
         <HomeScreen onScan={() => go('scan')} onHistory={() => go('history')} onOpenProduct={openProduct} />
       )}
-      {screen === 'scan' && <ScanScreen scanning={scanning} onClose={() => go('home')} onShutter={tapShutter} />}
+      {screen === 'scan' && (
+        <ScanScreen scanning={scanning} onClose={() => go('home')} onShutter={tapShutter} onDetect={handleDetect} />
+      )}
       {screen === 'result' && (
         <ResultScreen
           product={product}

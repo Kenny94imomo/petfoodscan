@@ -116,3 +116,10 @@ export const PRODUCTS: Product[] = [
 export function findProduct(id: string): Product {
   return PRODUCTS.find((p) => p.id === id) ?? PRODUCTS[0];
 }
+
+// Matches a scanned barcode value against the catalog, tolerating separators
+// and the leading zero that turns a UPC-A into its EAN-13 form.
+export function findProductByUpc(code: string): Product | undefined {
+  const digits = code.replace(/\D/g, '').replace(/^0+/, '');
+  return PRODUCTS.find((p) => p.upc.replace(/\D/g, '').replace(/^0+/, '') === digits);
+}
