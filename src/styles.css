@@ -1,0 +1,134 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #e6ebe9;
+  font-family: 'IBM Plex Sans', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: #1f7a68;
+}
+a:hover {
+  color: #17594c;
+}
+
+@keyframes scanline {
+  0% { top: 8%; }
+  50% { top: 88%; }
+  100% { top: 8%; }
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+/* ── Interactive press states ─────────────────────────────── */
+
+.press {
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s ease, opacity 0.12s ease;
+}
+.press-98:active { transform: scale(0.98); }
+.press-99:active { transform: scale(0.99); }
+.press-95:active { transform: scale(0.95); }
+.press-94:active { transform: scale(0.94); }
+.press-tab:active { transform: scale(0.92); opacity: 0.6; }
+
+/* ── Device frame (desktop preview) ───────────────────────── */
+
+.stage {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+}
+
+.device {
+  width: 402px;
+  height: 874px;
+  border-radius: 48px;
+  overflow: hidden;
+  position: relative;
+  background: #f2f5f4;
+  box-shadow: 0 40px 80px rgba(0, 0, 0, 0.18), 0 0 0 1px rgba(0, 0, 0, 0.12);
+}
+.device-dark {
+  background: #000;
+}
+
+.island {
+  position: absolute;
+  top: 11px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 126px;
+  height: 37px;
+  border-radius: 24px;
+  background: #000;
+  z-index: 50;
+}
+
+.statusbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+}
+
+.device-content {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.home-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 60;
+  height: 34px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  padding-bottom: 8px;
+  pointer-events: none;
+}
+.home-indicator-bar {
+  width: 139px;
+  height: 5px;
+  border-radius: 100px;
+  background: rgba(0, 0, 0, 0.25);
+}
+.device-dark .home-indicator-bar {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+/* On phones the app fills the viewport and the OS supplies the chrome. */
+@media (max-width: 520px) {
+  .stage {
+    padding: 0;
+    min-height: 100dvh;
+  }
+  .device {
+    width: 100vw;
+    height: 100dvh;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  .island,
+  .statusbar,
+  .home-indicator {
+    display: none;
+  }
+}
